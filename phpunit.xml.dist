@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache">
+    <testsuites>
+        <testsuite name="Filament AI Actions Test Suite">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <env name="APP_KEY" value="base64:2fl+KtvkdphvQyEFM8K4eKpQxqGzqZ8Y0vHhQzqzqzq="/>
+        <env name="OPENAI_API_KEY" value="sk-test"/>
+        <env name="OPENAI_MODEL" value="gpt-4o-mini"/>
+    </php>
+</phpunit>
