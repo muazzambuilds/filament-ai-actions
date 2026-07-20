@@ -1,6 +1,6 @@
 {
     "name": "muazzambuilds/filament-ai-actions",
-    "description": "OpenAI-powered Filament v5 actions — Summarize, Rewrite, and Classify for tables and forms.",
+    "description": "OpenAI-powered Filament v5 actions for summarizing, rewriting, classifying, generating, and translating content.",
     "keywords": [
         "filament",
         "filament-plugin",

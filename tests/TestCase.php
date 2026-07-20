@@ -19,5 +19,11 @@ abstract class TestCase extends Orchestra
         $app['config']->set('filament-ai-actions.api_key', 'sk-test');
         $app['config']->set('filament-ai-actions.model', 'gpt-4o-mini');
         $app['config']->set('filament-ai-actions.base_url', 'https://api.openai.com/v1');
+        $app['config']->set('database.default', 'testing');
+        $app['config']->set('database.connections.testing', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+        ]);
     }
 }

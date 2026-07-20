@@ -5,6 +5,7 @@ namespace MuazzamBuilds\FilamentAiActions\Concerns;
 use Closure;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
+use MuazzamBuilds\FilamentAiActions\AiActionsPlugin;
 use MuazzamBuilds\FilamentAiActions\OpenAI\OpenAiClient;
 use RuntimeException;
 use Throwable;
@@ -20,9 +21,19 @@ trait InteractsWithOpenAi
 
     protected string | Closure | null $applyToAttribute = null;
 
-    protected string | Closure | null $model = null;
+    protected string | Closure | null $aiModel = null;
 
     protected bool | Closure $enabled = true;
+
+    protected string | Closure | null $systemPrompt = null;
+
+    protected float | Closure | null $temperature = null;
+
+    protected int | Closure | null $maxTokens = null;
+
+    protected bool | Closure $shouldSaveResult = true;
+
+    protected ?Closure $applyResultUsing = null;
 
     /**
      * @param  array<int, string>|Closure  $attributes
@@ -50,7 +61,42 @@ trait InteractsWithOpenAi
 
     public function model(string | Closure | null $model): static
     {
-        $this->model = $model;
+        $this->aiModel = $model;
+
+        return $this;
+    }
+
+    public function systemPrompt(string | Closure | null $prompt): static
+    {
+        $this->systemPrompt = $prompt;
+
+        return $this;
+    }
+
+    public function temperature(float | Closure | null $temperature): static
+    {
+        $this->temperature = $temperature;
+
+        return $this;
+    }
+
+    public function maxTokens(int | Closure | null $maxTokens): static
+    {
+        $this->maxTokens = $maxTokens;
+
+        return $this;
+    }
+
+    public function saveResult(bool | Closure $condition = true): static
+    {
+        $this->shouldSaveResult = $condition;
+
+        return $this;
+    }
+
+    public function applyResultUsing(?Closure $callback): static
+    {
+        $this->applyResultUsing = $callback;
 
         return $this;
     }
@@ -64,7 +110,10 @@ trait InteractsWithOpenAi
 
     public function isAiEnabled(): bool
     {
+        $plugin = $this->resolvePlugin();
+
         return (bool) $this->evaluate($this->enabled)
+            && ($plugin?->isEnabled() ?? true)
             && app(OpenAiClient::class)->isConfigured();
     }
 
@@ -112,11 +161,16 @@ trait InteractsWithOpenAi
      */
     protected function runChat(array $messages): string
     {
-        $model = $this->evaluate($this->model);
+        $model = $this->evaluate($this->aiModel)
+            ?? $this->resolvePlugin()?->getModel();
+        $temperature = $this->evaluate($this->temperature);
+        $maxTokens = $this->evaluate($this->maxTokens);
 
         return app(OpenAiClient::class)->chat(
             $messages,
             filled($model) ? (string) $model : null,
+            is_numeric($temperature) ? (float) $temperature : null,
+            is_numeric($maxTokens) ? (int) $maxTokens : null,
         );
     }
 
@@ -124,12 +178,25 @@ trait InteractsWithOpenAi
     {
         $attribute = $this->evaluate($this->applyToAttribute);
 
+        if ($this->applyResultUsing instanceof Closure) {
+            $this->evaluate($this->applyResultUsing, [
+                'result' => $result,
+                'record' => $record,
+                'livewire' => $livewire,
+            ]);
+
+            return;
+        }
+
         if (! filled($attribute) || ! $record instanceof Model) {
             return;
         }
 
         $record->setAttribute((string) $attribute, $result);
-        $record->save();
+
+        if ((bool) $this->evaluate($this->shouldSaveResult)) {
+            $record->save();
+        }
 
         if (is_object($livewire) && method_exists($livewire, 'refreshFormData')) {
             $livewire->refreshFormData([(string) $attribute]);
@@ -160,6 +227,41 @@ trait InteractsWithOpenAi
         if (blank($content)) {
             throw new RuntimeException(__('filament-ai-actions::messages.missing_content'));
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $injections
+     */
+    protected function resolveSystemPrompt(string $default, array $injections = []): string
+    {
+        if ($this->systemPrompt === null) {
+            return $default;
+        }
+
+        $prompt = $this->evaluate($this->systemPrompt, $injections);
+
+        if (! is_string($prompt) || blank($prompt)) {
+            throw new RuntimeException(__('filament-ai-actions::messages.missing_system_prompt'));
+        }
+
+        return trim($prompt);
+    }
+
+    protected function resolvePlugin(): ?AiActionsPlugin
+    {
+        if (! app()->bound('filament')) {
+            return null;
+        }
+
+        $panel = filament()->getCurrentPanel();
+
+        if (! $panel?->hasPlugin('filament-ai-actions')) {
+            return null;
+        }
+
+        $plugin = $panel->getPlugin('filament-ai-actions');
+
+        return $plugin instanceof AiActionsPlugin ? $plugin : null;
     }
 
     /**

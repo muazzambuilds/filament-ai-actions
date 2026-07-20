@@ -56,8 +56,15 @@ class SummarizeAction extends Action
                 $payload = $this->modalPayload($data, $record);
                 $this->ensureContent($payload['content']);
 
-                $system = 'You are a careful editor. Summarize the user content clearly and accurately. '
-                    . 'Return only the summary, with no preamble.';
+                $system = $this->resolveSystemPrompt(
+                    'You are a careful editor. Summarize the user content clearly and accurately. '
+                        . 'Return only the summary, with no preamble.',
+                    [
+                        'content' => $payload['content'],
+                        'instructions' => $payload['instructions'],
+                        'record' => $record,
+                    ],
+                );
 
                 if (filled($payload['instructions'])) {
                     $system .= ' Additional instructions: ' . $payload['instructions'];
@@ -71,6 +78,7 @@ class SummarizeAction extends Action
                 $this->applyResultToRecord($record, $result, $livewire);
                 $this->notifySuccess(__('filament-ai-actions::messages.summarize.success'), $result);
             } catch (Throwable $exception) {
+                $this->failure();
                 $this->notifyFailure($exception);
             }
         });

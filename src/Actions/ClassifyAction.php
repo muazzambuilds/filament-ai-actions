@@ -103,11 +103,20 @@ class ClassifyAction extends Action
                     ->values()
                     ->all();
 
-                $system = 'You are a precise classifier. Choose exactly one label from this list: '
-                    . $labelList
-                    . '. Reply with only the label value'
-                    . (array_is_list($labels) ? '' : ' key')
-                    . ', with no explanation.';
+                $system = $this->resolveSystemPrompt(
+                    'You are a precise classifier. Choose exactly one label from this list: '
+                        . $labelList
+                        . '. Reply with only the label value'
+                        . (array_is_list($labels) ? '' : ' key')
+                        . ', with no explanation.',
+                    [
+                        'allowedLabels' => $allowed,
+                        'content' => $payload['content'],
+                        'instructions' => $payload['instructions'],
+                        'labels' => $labels,
+                        'record' => $record,
+                    ],
+                );
 
                 if (filled($payload['instructions'])) {
                     $system .= ' Additional instructions: ' . $payload['instructions'];
@@ -127,6 +136,7 @@ class ClassifyAction extends Action
                     __('filament-ai-actions::messages.classify.result_label', ['label' => $normalized]),
                 );
             } catch (Throwable $exception) {
+                $this->failure();
                 $this->notifyFailure($exception);
             }
         });
@@ -137,7 +147,7 @@ class ClassifyAction extends Action
      */
     protected function normalizeLabel(string $result, array $allowed): string
     {
-        $candidate = trim($result, " \t\n\r\0\x0B\"'`");
+        $candidate = $this->extractLabelCandidate($result);
 
         foreach ($allowed as $label) {
             if (strcasecmp($candidate, $label) === 0) {
@@ -145,12 +155,34 @@ class ClassifyAction extends Action
             }
         }
 
-        foreach ($allowed as $label) {
-            if (str_contains(mb_strtolower($candidate), mb_strtolower($label))) {
-                return $label;
+        throw new RuntimeException(__('filament-ai-actions::messages.invalid_label', [
+            'label' => $candidate,
+            'allowed' => implode(', ', $allowed),
+        ]));
+    }
+
+    protected function extractLabelCandidate(string $result): string
+    {
+        $candidate = trim($result);
+        $candidate = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $candidate) ?? $candidate;
+        $decoded = json_decode($candidate, true);
+
+        if (is_string($decoded)) {
+            return trim($decoded, " \t\n\r\0\x0B\"'`");
+        }
+
+        if (is_array($decoded)) {
+            foreach (['label', 'category', 'classification', 'result'] as $key) {
+                if (isset($decoded[$key]) && is_scalar($decoded[$key])) {
+                    return trim((string) $decoded[$key], " \t\n\r\0\x0B\"'`");
+                }
             }
         }
 
-        return $candidate;
+        if (preg_match('/^(?:label|category|classification|result)\s*:\s*(.+)$/i', $candidate, $matches) === 1) {
+            $candidate = $matches[1];
+        }
+
+        return trim($candidate, " \t\n\r\0\x0B\"'`");
     }
 }

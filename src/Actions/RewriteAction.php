@@ -101,8 +101,17 @@ class RewriteAction extends Action
                 $tone = (string) ($data['tone'] ?? 'professional');
                 $toneLabel = $this->getTones()[$tone] ?? $tone;
 
-                $system = "You are an expert writing assistant. Rewrite the user's content in a {$toneLabel} tone. "
-                    . 'Preserve meaning and factual details. Return only the rewritten text.';
+                $system = $this->resolveSystemPrompt(
+                    "You are an expert writing assistant. Rewrite the user's content in a {$toneLabel} tone. "
+                        . 'Preserve meaning and factual details. Return only the rewritten text.',
+                    [
+                        'content' => $payload['content'],
+                        'instructions' => $payload['instructions'],
+                        'record' => $record,
+                        'tone' => $tone,
+                        'toneLabel' => $toneLabel,
+                    ],
+                );
 
                 if (filled($payload['instructions'])) {
                     $system .= ' Additional instructions: ' . $payload['instructions'];
@@ -116,6 +125,7 @@ class RewriteAction extends Action
                 $this->applyResultToRecord($record, $result, $livewire);
                 $this->notifySuccess(__('filament-ai-actions::messages.rewrite.success'), $result);
             } catch (Throwable $exception) {
+                $this->failure();
                 $this->notifyFailure($exception);
             }
         });

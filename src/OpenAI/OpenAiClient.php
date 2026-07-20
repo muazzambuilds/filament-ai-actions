@@ -18,7 +18,13 @@ class OpenAiClient
     {
         $key = config('filament-ai-actions.api_key');
 
-        return filled($key) ? (string) $key : null;
+        if (! is_string($key) && ! is_numeric($key)) {
+            return null;
+        }
+
+        $key = trim((string) $key);
+
+        return $key !== '' ? $key : null;
     }
 
     /**
